@@ -1,27 +1,25 @@
+import os
 import json
 import random
-import os
 from telegram import Bot
 from openai import OpenAI
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 CHANNEL_ID = "@WBXISmartStudy"
 
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN not found in secrets")
+
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY not found in secrets")
+
 bot = Bot(token=BOT_TOKEN)
-client = OpenAI(api_key=OPENAI_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 def load_subjects():
     with open("subjects.json", "r", encoding="utf-8") as f:
         return json.load(f)
-
-def load_posted():
-    with open("posted_questions.json", "r", encoding="utf-8") as f:
-        return json.load(f)
-
-def save_posted(data):
-    with open("posted_questions.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
 
 def generate_question(subject, language):
     prompt = f"""
@@ -29,8 +27,7 @@ def generate_question(subject, language):
     Subject: {subject}
     Language: {language}
     Mention chapter name.
-    Only question output. No explanation.
-    Avoid repeating common generic questions.
+    Only output the chapter name and question.
     """
 
     response = client.chat.completions.create(
@@ -42,21 +39,18 @@ def generate_question(subject, language):
 
 def create_post():
     subjects = load_subjects()
-    posted = load_posted()
     message = "📚 WB XI Smart Study Zone\n\n"
 
     for subject, info in subjects.items():
-        q = generate_question(subject, info["language"])
+        try:
+            question = generate_question(subject, info["language"])
 
-        if q in posted:
-            continue
+            message += f"📘 Subject: {subject}\n"
+            message += f"🔥 Important Question:\n{question}\n\n"
 
-        posted.append(q)
+        except Exception as e:
+            message += f"❌ Error generating question for {subject}\n\n"
 
-        message += f"📘 Subject: {subject}\n"
-        message += f"🔥 Important Question:\n{q}\n\n"
-
-    save_posted(posted)
     bot.send_message(chat_id=CHANNEL_ID, text=message)
 
 if __name__ == "__main__":
